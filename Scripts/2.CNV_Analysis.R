@@ -7,56 +7,16 @@
 library(data.table)
 library(foreach)
 library(tidyverse)
-library(SeqArray)
-library(SNPRelate)
-library(viridis)
-library(doParallel)
-library(readxl)
 library(cowplot)
-library(adegenet)
-library(seqinr)
+library(GenomicRanges)
+library(GenomicFeatures)
+library(patchwork)
 
 # Working directory
 setwd("/project/berglandlab/connor/")
 
 # Metadata
 fin <- data.table(read.csv("metadata/samples.fin.9.8.22.csv"))
-
-# Executable in command line
-out <- c("new_vcf2/combined.filtsnps10bpindels_snps_filthighmiss.qual.pass.ann.gds")
-
-# Read in total SNPs
-tot_snps <- data.table(fread("metadata/snps_new"))
-
-# Load GDS
-genofile <- seqOpen(out)
-
-# Samples in GDS
-samps <- seqGetData(genofile, var.name = "sample.id")
-fin <- fin[Sample %in% samps]
-
-# Read in gene annotations
-panth <- data.table(read_excel("../daphnia_ref/Daphnia_annotation_PANTHER.xls"))
-colnames(panth)[36:38] <- c("bio_func", "mol_func", "cell_func")
-
-# Gene analyses
-pro <- read.fasta("/project/berglandlab/Karen/genomefiles/Daphnia.proteins.aed.0.6.fasta", seqtype="AA")
-pro <- data.table(gene=getName(pro), AA.length=getLength(pro))
-pro <- pro[,splice:=tstrsplit(gene, "-")[[2]]]
-
-# Read in gtf file
-gene.gtf <- data.table(fread("../daphnia_ref/Daphnia.aed.0.6.gtf"))
-colnames(gene.gtf)[1:5] <- c("chrom", "file", "sec", "start", "stop")
-
-extract_attributes <- function(gtf_attributes, att_of_interest){
-  att <- strsplit(gtf_attributes, "; ")
-  att <- gsub("\"","",unlist(att))
-  if(!is.null(unlist(strsplit(att[grep(att_of_interest, att)], " ")))){
-    return( unlist(strsplit(att[grep(att_of_interest, att)], " "))[2])
-  }else{
-    return(NA)}
-}
-gene.gtf$gene <- unlist(str_remove_all(lapply(gene.gtf$V9, extract_attributes, "transcript_id"), pattern = ";"))
 
 # SNP metadata - TSPs
 tot <- data.table(readRDS(file="/project/berglandlab/connor/data/classified_snps_filt.rds"))
@@ -87,10 +47,6 @@ dt.filt <- data.table(dt %>%
 
 ### Filter ###
 
-# Annotation libraries
-library(GenomicRanges)
-library(GenomicFeatures)
-
 # Filter bed file 
 bed <- fread("data/miss10.daphnia.pulex.merged.RMoutHiCGM.NsandDepthandChrEnd.final.merge50.bed", header = T)
 colnames(bed) <- c("seqnames", "start", "end")
@@ -100,7 +56,6 @@ bed.i <- makeGRangesFromDataFrame(bed, keep.extra.columns = T)
 
 # Annotating CNVs w/metadata
 cnv.reg <- makeGRangesFromDataFrame(dt.filt, keep.extra.columns = T)
-findOverlaps(cnv.reg, bed.i)
 
 # Filter out sites
 cnv.reg.result <- setdiff(x=cnv.reg, y=bed.i, ignore.strand=T)
@@ -228,10 +183,10 @@ cnv.plot <- {cnv.tsp %>%
 ### Annotating CNVs ###
 
 # Europe 
-dt.filt.euro <- dt.filt[.id %like% "Europe"]
+dt.filt.euro <- dt.filt.fin[.id %like% "Europe"]
 
 # NAm.
-dt.filt.nam <- dt.filt[.id %like% "America"]
+dt.filt.nam <- dt.filt.fin[.id %like% "America"]
 
 # Add gff
 txdb <- makeTxDbFromGFF("../daphnia_ref/Daphnia.aed.0.6.gtf")
@@ -241,23 +196,15 @@ annotateCnvs <- function(cnv, txdb) {
 
   # Annotating CNVs w/metadata
   cnv.reg <- makeGRangesFromDataFrame(cnv, keep.extra.columns = T)
-  findOverlaps(cnv.reg, bed.i)
-  
-  # Filter out sites
-  cnv.reg.result <- setdiff(x=cnv.reg, y=bed.i, ignore.strand=T)
-  
-  # Make reverse mapping
-  revmap <- findOverlaps(cnv.reg.result, cnv.reg, select="arbitrary")
-  mcols(cnv.reg.result) <- mcols(cnv.reg)[revmap, , drop=FALSE]
   
   # Gene annotations
   genes <- transcripts(txdb)
   
   # Overlap with genes
-  olaps <- findOverlaps(cnv.reg.result, genes)
+  olaps <- findOverlaps(cnv.reg, genes)
   
   # Annotate genes in overlap 
-  long_annotated <- cnv.reg.result[queryHits(olaps)]
+  long_annotated <- cnv.reg[queryHits(olaps)]
   long_annotated$gene <- genes[subjectHits(olaps)]$tx_name
   
   # Extract genes
@@ -285,8 +232,6 @@ write.table(genes.nam, file = "cnvs/CNV_all_genes_filtprivate_nam",
             row.names = F, col.names = F, quote = F)
 
 # Output plots
-library(patchwork)
-
 cnv.mega <- (cnv.hist / cnv.hist2 | cnv.region) +
   plot_layout(guides = "collect") & 
   theme(legend.position = 'bottom')
