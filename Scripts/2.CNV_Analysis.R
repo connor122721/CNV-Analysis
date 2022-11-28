@@ -1,5 +1,5 @@
 # CNV analysis plotting & annotation 
-# 11.27.2022
+# 11.28.2022
 # ijob -c 1 --mem=50G -p largemem -A berglandlab
 # module load goolf/7.1.0_3.1.4 R/4.0.3; module load gdal geos proj; R
 
@@ -81,9 +81,77 @@ dt.filt <- data.table(dt %>%
              group_by(.id, cnv) %>% 
              mutate(freq.cnv=length(cnv)))
 
+# Output bed files
+#write.table(dt.filt %>% select(seqnames, start, end),
+#  file = "cnvs/CNV_all_genes.bed", row.names = F, col.names = F, quote = F, sep = "\t")
+
+### Filter ###
+
+# Annotation libraries
+library(GenomicRanges)
+library(GenomicFeatures)
+
+# Filter bed file 
+bed <- fread("data/miss10.daphnia.pulex.merged.RMoutHiCGM.NsandDepthandChrEnd.final.merge50.bed", header = T)
+colnames(bed) <- c("seqnames", "start", "end")
+
+# Filter bed
+bed.i <- makeGRangesFromDataFrame(bed, keep.extra.columns = T)
+
+# Annotating CNVs w/metadata
+cnv.reg <- makeGRangesFromDataFrame(dt.filt, keep.extra.columns = T)
+findOverlaps(cnv.reg, bed.i)
+
+# Filter out sites
+cnv.reg.result <- setdiff(x=cnv.reg, y=bed.i, ignore.strand=T)
+
+# Make reverse mapping
+revmap <- findOverlaps(cnv.reg.result, cnv.reg, select="arbitrary")
+mcols(cnv.reg.result) <- mcols(cnv.reg)[revmap, ,drop=FALSE]
+
+# Convert
+dt.filt.fin <- data.table(data.frame(cnv.reg.result))
+
+# Filter out private CNVs
+dt.filt.fin <- dt.filt.fin[freq.cnv > 1] 
+
+# Count number of unique CNVs per continent
+dt.hist <- data.table(dt.filt.fin %>% 
+                    group_by(.id, cnv) %>% 
+                    summarize(CN = unique(CN),
+                              freq.cnv = unique(freq.cnv)) %>% 
+                    mutate(num.samps = case_when(
+                      .id %like% "Europe" ~ length(unique(fin[cont=="Daphnia.pulex.Europe"]$Sample)),
+                      .id %like% "America" ~ length(unique(fin[cont=="Daphnia.pulex.NorthAmerica"]$Sample)))) %>% 
+                    mutate(pop.cnv = freq.cnv/num.samps))
+
+# Count number of unique CNVs per continent
+dt2 <- data.table(dt.filt.fin %>% 
+         group_by(.id, CN) %>% 
+         summarize(num.cnv = length(unique(cnv))))
+
 # Frequency of CNVs
-cnv.hist <- {dt.filt %>% 
+cnv.hist <- {dt.hist %>% 
     ggplot(., aes(x=freq.cnv,
+                  fill=CN)) +
+    geom_histogram() +
+    facet_wrap(~.id) +
+    theme_bw() +
+    labs(x = "Counts of CNV", 
+         fill = "",
+         y = "Density") +
+    theme(strip.text = element_text(face="bold.italic", size=20),
+          legend.text = element_text(size=20), 
+          legend.position = "bottom",
+          legend.title = element_text(face="bold", size=20),
+          axis.text.x = element_text(face="bold", size=20),
+          axis.text.y = element_text(face="bold", size=20),
+          axis.title.x = element_text(face="bold", size=20),
+          axis.title.y = element_text(face="bold", size=20),
+          axis.title = element_text(face="bold", size=20))}
+
+cnv.hist2 <- {dt.hist %>% 
+    ggplot(., aes(x=pop.cnv,
                   fill=CN)) +
     geom_histogram() +
     facet_wrap(~.id) +
@@ -101,16 +169,8 @@ cnv.hist <- {dt.filt %>%
           axis.title.y = element_text(face="bold", size=20),
           axis.title = element_text(face="bold", size=20))}
 
-# Filter out privte CNVs
-dt.filt <- dt.filt[freq.cnv>1]
-
-# Count number of unique CNVs per continent
-dt2 <- data.table(dt.filt %>% 
-         group_by(.id, CN) %>% 
-         summarize(num.cnv = length(unique(cnv))))
-
 # Regions in genome
-cnv.region <- {dt %>% 
+cnv.region <- {dt.filt.fin %>% 
   ggplot(., aes(x=(start+end)/2,
                 y=median,
                 color=CN,
@@ -135,11 +195,11 @@ cnv.region <- {dt %>%
 
 # Overlap with TSPs
 toti <- data.table(tot[classified=="shared_poly"] %>% 
-                     select(start=position, stop=position, chrom, variant.id))
-cnvi <- dt %>% select(start, stop=end, chrom=seqnames, CN)
+                     dplyr::select(start=position, stop=position, chrom, variant.id))
+cnvi <- dt.filt.fin %>% dplyr::select(start, stop=end, chrom=seqnames, CN)
 setkey(cnvi, chrom, start, stop)
 
-laps <- na.omit(foverlaps(toti, cnvi, type="within") %>% select(-c("i.stop")))
+laps <- na.omit(foverlaps(toti, cnvi, type="within") %>% dplyr::select(-c("i.stop")))
 colnames(laps)[c(2:3, 5)] <- c("cnv.start", "cnv.stop", "position")
 
 # Proportion of TSPs within CNVs by category
@@ -167,10 +227,6 @@ cnv.plot <- {cnv.tsp %>%
 
 ### Annotating CNVs ###
 
-# Annotation libraries
-library(GenomicRanges)
-library(GenomicFeatures)
-
 # Europe 
 dt.filt.euro <- dt.filt[.id %like% "Europe"]
 
@@ -185,15 +241,23 @@ annotateCnvs <- function(cnv, txdb) {
 
   # Annotating CNVs w/metadata
   cnv.reg <- makeGRangesFromDataFrame(cnv, keep.extra.columns = T)
-
+  findOverlaps(cnv.reg, bed.i)
+  
+  # Filter out sites
+  cnv.reg.result <- setdiff(x=cnv.reg, y=bed.i, ignore.strand=T)
+  
+  # Make reverse mapping
+  revmap <- findOverlaps(cnv.reg.result, cnv.reg, select="arbitrary")
+  mcols(cnv.reg.result) <- mcols(cnv.reg)[revmap, , drop=FALSE]
+  
   # Gene annotations
   genes <- transcripts(txdb)
   
   # Overlap with genes
-  olaps <- findOverlaps(cnv.reg, genes)
+  olaps <- findOverlaps(cnv.reg.result, genes)
   
   # Annotate genes in overlap 
-  long_annotated <- cnv.reg[queryHits(olaps)]
+  long_annotated <- cnv.reg.result[queryHits(olaps)]
   long_annotated$gene <- genes[subjectHits(olaps)]$tx_name
   
   # Extract genes
@@ -201,6 +265,7 @@ annotateCnvs <- function(cnv, txdb) {
   
   # Output genes
   unique(olaps.dt$gene)
+  
 }
 
 # Europe genes
@@ -220,14 +285,16 @@ write.table(genes.nam, file = "cnvs/CNV_all_genes_filtprivate_nam",
             row.names = F, col.names = F, quote = F)
 
 # Output plots
+library(patchwork)
+
+cnv.mega <- (cnv.hist / cnv.hist2 | cnv.region) +
+  plot_layout(guides = "collect") & 
+  theme(legend.position = 'bottom')
+
 pdf("figures/cnv.num.tsp.plot.pdf")
 cnv.plot
 dev.off()
 
-pdf("figures/cnv.region.plot.pdf", width = 16, height = 12)
-cnv.region
-dev.off()
-
-pdf("figures/cnv.freq.hist.pdf", width = 16, height = 10)
-cnv.hist
+pdf("figures/cnv.freq.hist.mega.pdf", width = 24, height = 12)
+cnv.mega
 dev.off()

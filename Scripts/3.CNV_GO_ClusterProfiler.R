@@ -1,5 +1,5 @@
 # CNVs - GO enrichment
-# 11.27.2022
+# 11.28.2022
 # ijob -c 1 --mem=50G -p largemem -A berglandlab
 # module load goolf/7.1.0_3.1.4 R/4.0.3; module load gdal geos proj; R
 
@@ -58,7 +58,6 @@ gene.cand <- unique(gene.dt.euro$V1)
 # Universe
 univ <- unique(gene.gtf$gene)
 
-
 # Enrichment analysis
 go.test <- enricher(gene = gene.cand,
          pvalueCutoff = 0.05,
@@ -91,7 +90,6 @@ gene.cand <- unique(gene.dt.nam$V1)
 
 # Universe
 univ <- unique(gene.gtf$gene)
-
 
 # Enrichment analysis
 go.test <- enricher(gene = gene.cand,
@@ -178,7 +176,7 @@ write.table(pp.nam %>%
             file = "cnvs/clusterprofiler.nam.private.txt",
             quote = F, row.names = F, col.names = F, sep = "\t")
 
-pdf("figures/goterm_CNVs_euro_filtprivate.pdf", width=20, height=10)
+pdf("figures/goterm_CNVs_euro_filtprivate.pdf", width=16, height=10)
 plot.go.euro
 dev.off()
 
