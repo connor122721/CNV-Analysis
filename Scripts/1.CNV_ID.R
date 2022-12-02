@@ -1,5 +1,5 @@
 # Identify CNVs from Bams
-# 11.28.2022
+# 12.2.2022
 # ijob -c 10 --mem=50G -p standard -A berglandlab
 # module load goolf/7.1.0_3.1.4 R/4.0.3; module load gdal geos proj; R
 
@@ -36,7 +36,7 @@ doParallel::registerDoParallel(cores = 10)
 
 # Go through each species
 dt.out <- foreach(i=1:length(conts), .combine = "rbind", .errorhandling = "remove") %do% {
-i=1
+
   # Bam file
   print(paste(conts[i], i, sep=" "))
   bams <- c(dt[cont==conts[i]]$File)

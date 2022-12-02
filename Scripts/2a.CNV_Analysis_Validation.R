@@ -11,6 +11,7 @@ library(cowplot)
 library(GenomicRanges)
 library(GenomicFeatures)
 library(patchwork)
+library(cn.mops)
 
 # Working directory
 setwd("/project/berglandlab/connor/")
@@ -28,14 +29,7 @@ samp1 <- as.vector(fin[cont %in% as.character(compi[1])]$Sample)
 samp2 <- as.vector(fin[cont %in% as.character(compi[2])]$Sample)
 
 # Read in CN.mops
-readRDS(file="/project/berglandlab/connor/cnvs/")
-
-
-
-
-
-
-
+resCNMOPS <- readRDS(file="/project/berglandlab/connor/cnvs/Daphnia.pulex.Europe.resCNMOPS.rds")
 
 # Read in cnv info
 files <- system("ls -f -R /project/berglandlab/connor/cnvs/*cnvs.csv", intern = TRUE)
@@ -47,13 +41,72 @@ dt <- data.table(rbindlist(listi, use.names = T, idcol = T) %>%
                    mutate(cnv=paste(seqnames, start, end, CN, sep="_")))
 
 # Get frequency of CNVs
-dt.filt <- data.table(dt %>% 
+dt.nofilt <- data.table(dt %>% 
              group_by(.id, cnv) %>% 
              mutate(freq.cnv=length(cnv)))
 
 # Output bed files
 #write.table(dt.filt %>% select(seqnames, start, end),
 #  file = "cnvs/CNV_all_genes.bed", row.names = F, col.names = F, quote = F, sep = "\t")
+
+# Count number of unique CNVs per continent
+dt.nofilt <- data.table(dt.nofilt %>% 
+                        group_by(.id, cnv) %>% 
+                        summarize(CN = unique(CN),
+                                  freq.cnv = unique(freq.cnv)) %>% 
+                        mutate(num.samps = case_when(
+                          .id %like% "Europe" ~ length(unique(fin[cont=="Daphnia.pulex.Europe"]$Sample)),
+                          .id %like% "America" ~ length(unique(fin[cont=="Daphnia.pulex.NorthAmerica"]$Sample)))) %>% 
+                        mutate(pop.cnv = freq.cnv/num.samps))
+
+# Count number of unique CNVs per continent
+dt.nofilt.tot <- data.table(dt.nofilt %>% 
+                    group_by(.id, CN) %>% 
+                    summarize(num.cnv = length(unique(cnv))))
+
+# Frequency of CNVs
+cnv.hist <- {dt.nofilt %>% 
+    ggplot(., aes(x=freq.cnv,
+                  fill=CN)) +
+    geom_histogram() +
+    facet_wrap(~.id) +
+    theme_bw() +
+    labs(x = "Counts of CNV", 
+         fill = "",
+         y = "Density") +
+    theme(strip.text = element_text(face="bold.italic", size=20),
+          legend.text = element_text(size=20), 
+          legend.position = "bottom",
+          legend.title = element_text(face="bold", size=20),
+          axis.text.x = element_text(face="bold", size=20),
+          axis.text.y = element_text(face="bold", size=20),
+          axis.title.x = element_text(face="bold", size=20),
+          axis.title.y = element_text(face="bold", size=20),
+          axis.title = element_text(face="bold", size=20))}
+
+case.cnv <- cnvr(resCNMOPS)
+target <- makeGRangesFromDataFrame(dt[cnv %in% 
+                dt.nofilt[.id %like% "Euro"][freq.cnv==25]$cnv], 
+                         keep.extra.columns = T)
+
+# Overlap 
+olaps <- data.frame(findOverlaps(case.cnv, target))
+
+# Output
+pdf("figures/cnv.validation.pdf")
+plot(resCNMOPS, 
+     which=unique(olaps$queryHits)[3], 
+     toFile=T, 
+     margin=c(5,5))
+dev.off()
+
+
+
+
+
+
+
+
 
 ### Filter ###
 
