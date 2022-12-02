@@ -86,27 +86,66 @@ cnv.hist <- {dt.nofilt %>%
 
 case.cnv <- cnvr(resCNMOPS)
 target <- makeGRangesFromDataFrame(dt[cnv %in% 
-                dt.nofilt[.id %like% "Euro"][freq.cnv==25]$cnv], 
+                dt.nofilt[.id %like% "Euro"][freq.cnv>20]$cnv], 
                          keep.extra.columns = T)
 
 # Overlap 
 olaps <- data.frame(findOverlaps(case.cnv, target))
 
-# Output
-pdf("figures/cnv.validation.pdf")
-plot(resCNMOPS, 
-     which=unique(olaps$queryHits)[3], 
-     toFile=T, 
-     margin=c(5,5))
+# Forloop plotting
+foreach(i=1:length(unique(olaps$queryHits))) %do% {
+
+  print(i)
+  quer=unique(olaps$queryHits)[i]
+  
+  pdf(paste("figures/cnv.validation.cnvr", quer, ".pdf", sep=""))
+  plot(resCNMOPS, 
+       which=quer, 
+       toFile=T, 
+       margin=c(5,5))
+  dev.off()
+
+}
+
+### CNVR ###
+
+# Read in cnv info
+files1 <- system("ls -f -R /project/berglandlab/connor/cnvs/*cnvr.csv", intern = TRUE)
+listi1 <- lapply(files1, fread)
+setattr(listi1, 'names', list.files(path = "/project/berglandlab/connor/cnvs", pattern = "cnvr.csv"))
+
+# Bind list & make unique CNV
+dt.cnvr <- data.table(fread("/project/berglandlab/connor/cnvs/Daphnia.pulex.Europecnvr.csv"))
+
+dt.t <- data.table(t(dt.cnvr %>% dplyr::select(!colnames(dt.cnvr)[1:6]))) %>% 
+                     mutate(samp=colnames(dt.cnvr)[7:dim(dt.cnvr)[2]])
+
+# Wide to long
+rows.name <- dt.cnvr %>% 
+  dplyr::select(colnames(dt.cnvr)[2:4]) %>% 
+  summarize(name=paste(seqnames, start, end, sep="_"))
+colnames(dt.t) <- c(rows.name$name, "samp")
+
+# Make CNVs numeric
+dt.t <- data.table(dt.t %>% 
+                     pivot_longer(cols=c(colnames(dt.t)[1:dim(dt.t)[2]-1]),
+                                  names_to="name") %>% 
+                     mutate(value=as.numeric(str_replace(value, pattern = "CN", replacement = ""))) %>% 
+                     pivot_wider(names_from = "name"))
+
+# PCA of CNVs
+pca <- prcomp(dt.t %>% dplyr::select(!samp))
+
+# PCA 1/2
+pdf("figures/pca.cnv.euro.pdf")
+plot(pca$x[,1], 
+     pca$x[,2])
 dev.off()
 
-
-
-
-
-
-
-
+# SKree plot
+pdf("figures/pca.skree.cnv.pdf")
+plot(pca)
+dev.off()
 
 ### Filter ###
 
