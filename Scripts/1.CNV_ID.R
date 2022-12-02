@@ -36,7 +36,7 @@ doParallel::registerDoParallel(cores = 10)
 
 # Go through each species
 dt.out <- foreach(i=1:length(conts), .combine = "rbind", .errorhandling = "remove") %do% {
-
+i=1
   # Bam file
   print(paste(conts[i], i, sep=" "))
   bams <- c(dt[cont==conts[i]]$File)
@@ -59,6 +59,10 @@ dt.out <- foreach(i=1:length(conts), .combine = "rbind", .errorhandling = "remov
   segm <- as.data.frame(segmentation(resCNMOPS))
   CNVs <- as.data.frame(cnvs(resCNMOPS))
   CNVregions <- as.data.frame(cnvr(resCNMOPS))
+  
+  # Save CN.mops object
+  saveRDS(resCNMOPS, file = paste("/project/berglandlab/connor/cnvs/", 
+                                  conts[i],".resCNMOPS.rds", sep=""))
   
   # Output
   write.csv(segm, paste("/project/berglandlab/connor/cnvs/", 

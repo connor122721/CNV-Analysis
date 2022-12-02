@@ -1,5 +1,5 @@
 # CNV analysis plotting & annotation 
-# 11.28.2022
+# 12.2.2022
 # ijob -c 1 --mem=50G -p largemem -A berglandlab
 # module load goolf/7.1.0_3.1.4 R/4.0.3; module load gdal geos proj; R
 
@@ -26,6 +26,16 @@ compi=c("Daphnia.pulex.NorthAmerica",
         "Daphnia.pulex.Europe")
 samp1 <- as.vector(fin[cont %in% as.character(compi[1])]$Sample)
 samp2 <- as.vector(fin[cont %in% as.character(compi[2])]$Sample)
+
+# Read in CN.mops
+readRDS(file="/project/berglandlab/connor/cnvs/")
+
+
+
+
+
+
+
 
 # Read in cnv info
 files <- system("ls -f -R /project/berglandlab/connor/cnvs/*cnvs.csv", intern = TRUE)
