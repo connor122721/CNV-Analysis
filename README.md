@@ -6,4 +6,5 @@
 
 #### Uses CN.mops package in R: https://bioconductor.org/packages/release/bioc/html/cn.mops.html
 
-![alt text](https://github.com/connor122721/CNV-Analysis/blob/main/Figures/cnv.validation.cnvr404.pdf "Candidate copy number variant")
+![image description](https://github.com/connor122721/CNV-Analysis/blob/main/Figures/cnv.validation.cnvr404.pdf "Candidate copy number variant")
+![example CNV](main/Figures/cnv.validation.cnvr404.pdf)
