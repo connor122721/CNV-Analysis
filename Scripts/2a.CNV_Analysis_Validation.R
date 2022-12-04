@@ -136,214 +136,65 @@ dt.t <- data.table(dt.t %>%
 # PCA of CNVs
 pca <- prcomp(dt.t %>% dplyr::select(!samp))
 
+pca.summ <- summary(pca)
+
+# Merge by Sample
+pca1 <- data.table(data.table(sample=dt.t$samp, PC1=pca$x[,1],
+                  PC2=pca$x[,2], PC3=pca$x[,3],
+                  PC4=pca$x[,4], PC5=pca$x[,5],
+                  PC6=pca$x[,6], PC7=pca$x[,7], 
+                  PC8=pca$x[,8]) %>% 
+  mutate(Sample=gsub("\\RG", "",
+                gsub("\\.bam", "",
+                gsub("\\mdup.bam", "", 
+                gsub("\\_finalmap_*", "",sample))))))
+
+# Remove missing samples
+pca1 <- data.table(pca1[Sample %in% fin$Sample])
+
+# Merge PCA and metadata
+pca1 <- data.table(merge(pca1, fin, by="Sample") %>% 
+           mutate(Species=case_when(cont=="Daphnia.pulexcaria.NorthAmerica"~
+                                          "D.pulex nam x D.pulicaria nam",
+                                    Species=="Daphnia pulex" ~ "D.pulex",
+                                    Species=="Daphnia pulicaria" ~ "D.pulicaria",
+                                    TRUE ~ Species)))
+
+# PC 1/2 Plot
+library(ggforce)
+
+# Remove Unknown SCs
+pca1 <- pca1[!SC=="OO"][!pondID==""]
+
+pca12 <- {pca1 %>%
+  ggplot(., 
+         aes(x=PC1, 
+             y=PC2, 
+             fill=pondID), 
+             shape=) +
+  geom_point(size=6, alpha=0.8) +
+  geom_mark_ellipse() +
+  theme_minimal() + 
+  labs(x=paste("PC1 (", round(pca.summ$importance[2,1], digits=3)*100, " %)", sep=""),
+       y=paste("PC2 (", round(pca.summ$importance[2,2], digits=3)*100, " %)", sep="")) +
+  #scale_fill_continuous(name = "Species complex") +
+  theme(strip.text = element_text(face="bold.italic", size=16),
+        legend.text = element_text(size=18, face="bold.italic"),
+        legend.title = element_text(face="bold", size=20),
+        axis.text.x = element_text(face="bold", size=18),
+        axis.text.y = element_text(face="bold", size=18),
+        axis.title.x = element_text(face="bold", size=20),
+        axis.title.y = element_text(face="bold", size=20),
+        axis.title = element_text(face="bold", size=20))}
+
 # PCA 1/2
-pdf("figures/pca.cnv.euro.pdf")
-plot(pca$x[,1], 
-     pca$x[,2])
+pdf("figures/pca.cnv.euro.pond.pdf")
+pca12
 dev.off()
 
 # SKree plot
 pdf("figures/pca.skree.cnv.pdf")
 plot(pca)
-dev.off()
-
-### Filter ###
-
-# Filter bed file 
-bed <- fread("data/miss10.daphnia.pulex.merged.RMoutHiCGM.NsandDepthandChrEnd.final.merge50.bed", header = T)
-colnames(bed) <- c("seqnames", "start", "end")
-
-# Filter bed
-bed.i <- makeGRangesFromDataFrame(bed, keep.extra.columns = T)
-
-# Annotating CNVs w/metadata
-cnv.reg <- makeGRangesFromDataFrame(dt.filt, keep.extra.columns = T)
-
-# Filter out sites
-cnv.reg.result <- setdiff(x=cnv.reg, y=bed.i, ignore.strand=T)
-
-# Make reverse mapping
-revmap <- findOverlaps(cnv.reg.result, cnv.reg, select="arbitrary")
-mcols(cnv.reg.result) <- mcols(cnv.reg)[revmap, ,drop=FALSE]
-
-# Convert
-dt.filt.fin <- data.table(data.frame(cnv.reg.result))
-
-# Filter out private CNVs
-#dt.filt.fin <- dt.filt.fin[freq.cnv > 1] 
-
-# Count number of unique CNVs per continent
-dt.hist <- data.table(dt.filt.fin %>% 
-                    group_by(.id, cnv) %>% 
-                    summarize(CN = unique(CN),
-                              freq.cnv = unique(freq.cnv)) %>% 
-                    mutate(num.samps = case_when(
-                      .id %like% "Europe" ~ length(unique(fin[cont=="Daphnia.pulex.Europe"]$Sample)),
-                      .id %like% "America" ~ length(unique(fin[cont=="Daphnia.pulex.NorthAmerica"]$Sample)))) %>% 
-                    mutate(pop.cnv = freq.cnv/num.samps))
-
-# Count number of unique CNVs per continent
-dt2 <- data.table(dt.filt.fin %>% 
-         group_by(.id, CN) %>% 
-         summarize(num.cnv = length(unique(cnv))))
-
-# Frequency of CNVs
-cnv.hist <- {dt.hist %>% 
-    ggplot(., aes(x=freq.cnv,
-                  fill=CN)) +
-    geom_histogram() +
-    facet_wrap(~.id) +
-    theme_bw() +
-    labs(x = "Counts of CNV", 
-         fill = "",
-         y = "Density") +
-    theme(strip.text = element_text(face="bold.italic", size=20),
-          legend.text = element_text(size=20), 
-          legend.position = "bottom",
-          legend.title = element_text(face="bold", size=20),
-          axis.text.x = element_text(face="bold", size=20),
-          axis.text.y = element_text(face="bold", size=20),
-          axis.title.x = element_text(face="bold", size=20),
-          axis.title.y = element_text(face="bold", size=20),
-          axis.title = element_text(face="bold", size=20))}
-
-cnv.hist2 <- {dt.hist %>% 
-    ggplot(., aes(x=pop.cnv,
-                  fill=CN)) +
-    geom_histogram() +
-    facet_wrap(~.id, scales="free") +
-    theme_bw() +
-    labs(x = "Population frequency of CNV", 
-         fill = "",
-         y = "Density") +
-    theme(strip.text = element_text(face="bold.italic", size=20),
-          legend.text = element_text(size=20), 
-          legend.position = "bottom",
-          legend.title = element_text(face="bold", size=20),
-          axis.text.x = element_text(face="bold", size=20),
-          axis.text.y = element_text(face="bold", size=20),
-          axis.title.x = element_text(face="bold", size=20),
-          axis.title.y = element_text(face="bold", size=20),
-          axis.title = element_text(face="bold", size=20))}
-
-# Regions in genome
-cnv.region <- {dt.filt.fin %>% 
-  ggplot(., aes(x=(start+end)/2,
-                y=median,
-                color=CN,
-                group=sampleName
-                )) +
-  geom_point() +
-  geom_hline(yintercept=0) +
-  facet_wrap(~.id) +
-  theme_bw() +
-  labs(x = "Position", 
-       color = "",
-       y = "Normalized Read Depth") +
-  theme(strip.text = element_text(face="bold.italic", size=20),
-        legend.text = element_text(size=20), 
-        legend.position = "bottom",
-        legend.title = element_text(face="bold", size=20),
-        axis.text.x = element_text(face="bold", size=20),
-        axis.text.y = element_text(face="bold", size=20),
-        axis.title.x = element_text(face="bold", size=20),
-        axis.title.y = element_text(face="bold", size=20),
-        axis.title = element_text(face="bold", size=20))}
-
-# Overlap with TSPs
-toti <- data.table(tot[classified=="shared_poly"] %>% 
-                     dplyr::select(start=position, stop=position, chrom, variant.id))
-cnvi <- dt.filt.fin %>% dplyr::select(start, stop=end, chrom=seqnames, CN)
-setkey(cnvi, chrom, start, stop)
-
-laps <- na.omit(foverlaps(toti, cnvi, type="within") %>% dplyr::select(-c("i.stop")))
-colnames(laps)[c(2:3, 5)] <- c("cnv.start", "cnv.stop", "position")
-
-# Proportion of TSPs within CNVs by category
-cnv.tsp <- data.table(laps %>% 
-  group_by(CN) %>% 
-  summarize(n=length(unique(variant.id))) %>% 
-  mutate(n.stan=n/length(unique(toti$variant.id))))
-
-# CNV by TSP
-cnv.plot <- {cnv.tsp %>% 
-  ggplot(aes(x=n, 
-             y=CN)) +
-  geom_col(fill="purple", color="black") +
-  theme_bw() +
-  labs(x = "Number of TSPs",
-       y = "CNV Category") +
-  theme(strip.text = element_text(face="bold.italic", size=18),
-        legend.text = element_text(face="bold", size=18),
-        legend.title = element_text(face="bold", size=18),
-        axis.text.x = element_text(face="bold", size=18),
-        axis.text.y = element_text(face="bold", size=18),
-        axis.title.x = element_text(face="bold", size=18),
-        axis.title.y = element_text(face="bold", size=18),
-        axis.title = element_text(face="bold", size=20))}
-
-### Annotating CNVs ###
-
-# Europe 
-dt.filt.euro <- dt.filt.fin[.id %like% "Europe"]
-
-# NAm.
-dt.filt.nam <- dt.filt.fin[.id %like% "America"]
-
-# Add gff
-txdb <- makeTxDbFromGFF("../daphnia_ref/Daphnia.aed.0.6.gtf")
-
-# Annotate and output gene list
-annotateCnvs <- function(cnv, txdb) {
-
-  # Annotating CNVs w/metadata
-  cnv.reg <- makeGRangesFromDataFrame(cnv, keep.extra.columns = T)
-  
-  # Gene annotations
-  genes <- transcripts(txdb)
-  
-  # Overlap with genes
-  olaps <- findOverlaps(cnv.reg, genes)
-  
-  # Annotate genes in overlap 
-  long_annotated <- cnv.reg[queryHits(olaps)]
-  long_annotated$gene <- genes[subjectHits(olaps)]$tx_name
-  
-  # Extract genes
-  olaps.dt <- data.table(data.frame(long_annotated))
-  
-  # Output genes
-  unique(olaps.dt$gene)
-  
-}
-
-# Europe genes
-genes.euro <- annotateCnvs(cnv=dt.filt.euro, txdb=txdb)
-
-# Nam. genes
-genes.nam <- annotateCnvs(cnv=dt.filt.nam, txdb=txdb)
-
-# QC
-table(genes.nam %in% genes.euro)
-
-# Write gene lists
-write.table(genes.euro, file = "cnvs/CNV_all_genes_filtprivate_euro", 
-            row.names = F, col.names = F, quote = F)
-
-write.table(genes.nam, file = "cnvs/CNV_all_genes_filtprivate_nam", 
-            row.names = F, col.names = F, quote = F)
-
-# Output plots
-cnv.mega <- (cnv.hist / cnv.hist2 | cnv.region) +
-  plot_layout(guides = "collect") & 
-  theme(legend.position = 'bottom')
-
-pdf("figures/cnv.num.tsp.plot.pdf")
-cnv.plot
-dev.off()
-
-pdf("figures/cnv.freq.hist.mega.pdf", width = 24, height = 12)
-cnv.mega
 dev.off()
 
 # Read in gene annotations
@@ -365,6 +216,42 @@ extract_attributes <- function(gtf_attributes, att_of_interest){
     return(NA)}
 }
 gene.gtf$gene <- unlist(str_remove_all(lapply(gene.gtf$V9, extract_attributes, "transcript_id"), pattern = ";"))
+gene.gtf <- data.table(gene.gtf %>% 
+                mutate(gene.id=tstrsplit(gene, "-")[[1]],
+                       splice=tstrsplit(gene, "-")[[2]]))
 
+# Example CNV
+exam=c(260000:420000)
+
+# Gene structure plot
+gene.struc <- {gene.gtf[chrom=="Scaffold_9200_HRSCAF_10757"][start %in% 310001:350000][!sec=="transcript"] %>% 
+    ggplot(aes(x=start/1000, y=gene)) +
+    geom_linerange(aes(xmin=start/1000, 
+                       xmax=stop/1000,
+                       color=splice), 
+                   size=7) +
+    theme_classic() +
+    labs(x="Position (Kbp)",
+         y="Gene",
+         color="Splice") +
+    scale_color_brewer(palette = "Set2") +
+    theme(strip.text = element_text(face="bold", size=18),
+          title = element_text(face="bold.italic", size=20),
+          legend.position = "bottom",
+          legend.title = element_text(face="bold", size=20),
+          legend.text = element_text(face="bold", size=18),
+          axis.text.x = element_text(face="bold", size=18),
+          axis.text.y = element_blank(),
+          axis.title.x = element_text(face="bold", size=20),
+          axis.title.y = element_text(face="bold", size=20),
+          axis.title = element_text(face="bold", size=20))}
+
+panth[qseqid %in% gene.gtf[chrom=="Scaffold_9200_HRSCAF_10757"][start %in% 310001:350000][sec=="transcript"]$gene]
+
+dt.nofilt[cnv=="Scaffold_9200_HRSCAF_10757_310001_350000_CN3"]
+
+pdf("figures/cnv.genestructure.pdf", width=10, height=8)
+gene.struc
+dev.off()
 
 
