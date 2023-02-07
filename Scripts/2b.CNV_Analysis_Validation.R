@@ -107,6 +107,10 @@ foreach(i=1:length(unique(olaps$queryHits))) %do% {
 
 }
 
+# Overlap with Toll-like receptor 2 gene
+toll = GRanges(seqnames='Scaffold_9200_HRSCAF_10757', ranges=IRanges(6676234, 6686097))
+toll.lap <- data.frame(findOverlaps(case.cnv, toll))
+
 # Read in gene annotations
 library(readxl)
 panth <- data.table(read_excel("/project/berglandlab/daphnia_ref/Daphnia_annotation_PANTHER.xls"))
@@ -134,7 +138,7 @@ gene.gtf <- data.table(gene.gtf %>%
 exam=c(260000:420000)
 
 # Gene structure plot
-gene.struc <- {gene.gtf[chrom=="Scaffold_9200_HRSCAF_10757"][start %in% 310001:350000][!sec=="transcript"] %>% 
+gene.struc <- {gene.gtf[chrom=="Scaffold_9200_HRSCAF_10757"][start %in% 6676234:6686097][!sec=="transcript"] %>% 
     ggplot(aes(x=start/1000, y=gene)) +
     geom_linerange(aes(xmin=start/1000, 
                        xmax=stop/1000,
@@ -156,7 +160,7 @@ gene.struc <- {gene.gtf[chrom=="Scaffold_9200_HRSCAF_10757"][start %in% 310001:3
           axis.title.y = element_text(face="bold", size=20),
           axis.title = element_text(face="bold", size=20))}
 
-panth[qseqid %in% gene.gtf[chrom=="Scaffold_9200_HRSCAF_10757"][start %in% 310001:350000][sec=="transcript"]$gene]
+panth[qseqid %in% gene.gtf[chrom=="Scaffold_9200_HRSCAF_10757"][start %in% 6676234:6686097][sec=="transcript"]$gene]
 
 dt.nofilt[cnv %like% "Scaffold_9200_HRSCAF_10757_310001_350000"]
 
