@@ -7,4 +7,4 @@
 #### Uses CN.mops package in R: https://bioconductor.org/packages/release/bioc/html/cn.mops.html
 
 ## Example CNV region
-![Example CNV](https://github.com/connor122721/CNV-Analysis/blob/main/Figures/cnv.validation.cnvr404.pdf)
+![cnv validation cnvr404](https://user-images.githubusercontent.com/55203772/223614401-e70848e3-3d0f-4b5e-afe5-6d598d1f9136.png)
